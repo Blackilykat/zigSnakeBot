@@ -175,19 +175,19 @@ fn tickGame(snakeHead: *Position, snakeDirection: Direction, tail: *PositionQueu
 
 fn takeUserInput(direction: *Direction, oldDirection: Direction) void {
     const Key = raylib.KeyboardKey;
-    if (raylib.isKeyDown(Key.w) or raylib.isKeyDown(Key.up)) {
+    if (raylib.isKeyPressed(Key.w) or raylib.isKeyPressed(Key.up)) {
         if (oldDirection != Direction.south) {
             direction.* = Direction.north;
         }
-    } else if (raylib.isKeyDown(Key.a) or raylib.isKeyDown(Key.left)) {
+    } else if (raylib.isKeyPressed(Key.a) or raylib.isKeyPressed(Key.left)) {
         if (oldDirection != Direction.east) {
             direction.* = Direction.west;
         }
-    } else if (raylib.isKeyDown(Key.s) or raylib.isKeyDown(Key.down)) {
+    } else if (raylib.isKeyPressed(Key.s) or raylib.isKeyPressed(Key.down)) {
         if (oldDirection != Direction.north) {
             direction.* = Direction.south;
         }
-    } else if (raylib.isKeyDown(Key.d) or raylib.isKeyDown(Key.right)) {
+    } else if (raylib.isKeyPressed(Key.d) or raylib.isKeyPressed(Key.right)) {
         if (oldDirection != Direction.west) {
             direction.* = Direction.east;
         }
