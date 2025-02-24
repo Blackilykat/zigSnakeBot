@@ -42,11 +42,23 @@ const snakeTailColor: Color = .{
     .a = 255,
 };
 
+const deathText = "Game over!";
+const deathTextSize = 60;
+const deathRestartText = "Press space to restart";
+const deathRestartSize = 30;
+const deathRestartOffset = 100;
+const deathTextColor: Color = .{
+    .r = 240,
+    .g = 60,
+    .b = 60,
+    .a = 255,
+};
+
 const gameTileSizeX = (windowWidth - (gameSpacingX * 2)) / gameTilesX;
 const gameTileSizeY = (windowWidth - (gameSpacingY * 2)) / gameTilesY;
 
 const Direction = enum { north, east, south, west };
-const Position = struct { x: i32, y: i32 };
+const Position = struct { x: i32 = 0, y: i32 = 0 };
 const PositionQueue = queue.Queue(Position);
 
 pub fn main() !void {
@@ -56,14 +68,19 @@ pub fn main() !void {
     raylib.initWindow(windowWidth, windowHeight, windowTitle);
     raylib.setTargetFPS(100);
 
-    var tailLength: i32 = 10;
+    var tailLength: i32 = 0;
 
     var tail = PositionQueue.init(allocator);
 
-    var snakeHead: Position = .{ .x = gameTilesX / 2, .y = gameTilesY / 2 };
+    var snakeHead: Position = .{};
     var snakeDirection: Direction = Direction.north;
+    var oldSnakeDirection: Direction = Direction.north;
 
     var currentTickTime: f32 = 0.0;
+
+    var isGameOngoing = false;
+
+    resetGame(allocator, &snakeHead, &snakeDirection, &tail, &tailLength, &isGameOngoing);
 
     while (!raylib.windowShouldClose()) {
         raylib.beginDrawing();
@@ -93,18 +110,45 @@ pub fn main() !void {
             }
         }
 
-        takeUserInput(&snakeDirection);
+        if (!isGameOngoing) {
+            {
+                const textWidth = raylib.measureText(deathText, deathTextSize);
+                raylib.drawText(deathText, @divFloor(windowWidth, 2) - @divFloor(textWidth, 2), @divFloor(windowHeight, 2) - @divFloor(deathTextSize, 2), deathTextSize, deathTextColor);
+            }
+            {
+                const textWidth = raylib.measureText(deathRestartText, deathRestartSize);
+                raylib.drawText(deathRestartText, @divFloor(windowWidth, 2) - @divFloor(textWidth, 2), @divFloor(windowHeight, 2) - @divFloor(deathRestartSize, 2) + deathRestartOffset, deathRestartSize, deathTextColor);
+            }
+
+            if (raylib.isKeyPressed(raylib.KeyboardKey.space)) {
+                resetGame(allocator, &snakeHead, &snakeDirection, &tail, &tailLength, &isGameOngoing);
+            }
+        }
+
+        takeUserInput(&snakeDirection, oldSnakeDirection);
 
         if (currentTickTime > targetTickTime) {
             currentTickTime -= targetTickTime;
-            try tickGame(&snakeHead, snakeDirection, &tail, &tailLength);
+            if (isGameOngoing) {
+                try tickGame(&snakeHead, snakeDirection, &tail, &tailLength, &isGameOngoing);
+                oldSnakeDirection = snakeDirection;
+            }
         }
 
         raylib.endDrawing();
     }
 }
 
-fn tickGame(snakeHead: *Position, snakeDirection: Direction, tail: *PositionQueue, tailLength: *i32) !void {
+fn resetGame(allocator: std.mem.Allocator, snakeHead: *Position, snakeDirection: *Direction, tail: *PositionQueue, tailLength: *i32, isGameOngoing: *bool) void {
+    snakeHead.* = .{ .x = gameTilesX / 2, .y = gameTilesY / 2 };
+    snakeDirection.* = Direction.north;
+    tail.deinit();
+    tail.* = PositionQueue.init(allocator);
+    tailLength.* = 10;
+    isGameOngoing.* = true;
+}
+
+fn tickGame(snakeHead: *Position, snakeDirection: Direction, tail: *PositionQueue, tailLength: *i32, isGameOngoing: *bool) !void {
     const newPos = torwards(snakeHead.*, snakeDirection);
 
     const inBounds = newPos.x >= 0 and newPos.x < gameTilesX and newPos.y >= 0 and newPos.y < gameTilesY;
@@ -124,25 +168,27 @@ fn tickGame(snakeHead: *Position, snakeDirection: Direction, tail: *PositionQueu
             _ = tail.dequeue();
         }
         snakeHead.* = newPos;
+    } else {
+        isGameOngoing.* = false;
     }
 }
 
-fn takeUserInput(direction: *Direction) void {
+fn takeUserInput(direction: *Direction, oldDirection: Direction) void {
     const Key = raylib.KeyboardKey;
     if (raylib.isKeyDown(Key.w) or raylib.isKeyDown(Key.up)) {
-        if (direction.* != Direction.south) {
+        if (oldDirection != Direction.south) {
             direction.* = Direction.north;
         }
     } else if (raylib.isKeyDown(Key.a) or raylib.isKeyDown(Key.left)) {
-        if (direction.* != Direction.east) {
+        if (oldDirection != Direction.east) {
             direction.* = Direction.west;
         }
     } else if (raylib.isKeyDown(Key.s) or raylib.isKeyDown(Key.down)) {
-        if (direction.* != Direction.north) {
+        if (oldDirection != Direction.north) {
             direction.* = Direction.south;
         }
     } else if (raylib.isKeyDown(Key.d) or raylib.isKeyDown(Key.right)) {
-        if (direction.* != Direction.west) {
+        if (oldDirection != Direction.west) {
             direction.* = Direction.east;
         }
     }
