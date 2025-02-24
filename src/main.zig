@@ -104,9 +104,21 @@ pub fn main() !void {
     }
 }
 
-fn tickGame(snakeHead: *Position, snakeDirection: Direction, tail: *queue.Queue(Position), tailLength: *i32) !void {
+fn tickGame(snakeHead: *Position, snakeDirection: Direction, tail: *PositionQueue, tailLength: *i32) !void {
     const newPos = torwards(snakeHead.*, snakeDirection);
-    if (newPos.x >= 0 and newPos.x < gameTilesX and newPos.y >= 0 and newPos.y < gameTilesY) {
+
+    const inBounds = newPos.x >= 0 and newPos.x < gameTilesX and newPos.y >= 0 and newPos.y < gameTilesY;
+
+    var onTail = false;
+    var node: ?*PositionQueue.Node = tail.first;
+    while (node != null) {
+        if (node.?.value.x == newPos.x and node.?.value.y == newPos.y) {
+            onTail = true;
+        }
+        node = node.?.next;
+    }
+
+    if (inBounds and !onTail) {
         try tail.enqueue(snakeHead.*);
         if (tail.size > tailLength.*) {
             _ = tail.dequeue();
