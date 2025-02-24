@@ -42,6 +42,13 @@ const snakeTailColor: Color = .{
     .a = 255,
 };
 
+const appleColor: Color = .{
+    .r = 255,
+    .g = 50,
+    .b = 50,
+    .a = 255,
+};
+
 const deathText = "Game over!";
 const deathTextSize = 60;
 const deathRestartText = "Press space to restart";
@@ -80,7 +87,9 @@ pub fn main() !void {
 
     var isGameOngoing = false;
 
-    resetGame(allocator, &snakeHead, &snakeDirection, &tail, &tailLength, &isGameOngoing);
+    var apple: Position = .{};
+
+    try resetGame(allocator, &snakeHead, &snakeDirection, &tail, &tailLength, &isGameOngoing, &apple);
 
     while (!raylib.windowShouldClose()) {
         raylib.beginDrawing();
@@ -103,6 +112,10 @@ pub fn main() !void {
                     }
                 }
 
+                if (x == apple.x and y == apple.y) {
+                    color = appleColor;
+                }
+
                 if (x == snakeHead.x and y == snakeHead.y) {
                     color = snakeHeadColor;
                 }
@@ -121,7 +134,7 @@ pub fn main() !void {
             }
 
             if (raylib.isKeyPressed(raylib.KeyboardKey.space)) {
-                resetGame(allocator, &snakeHead, &snakeDirection, &tail, &tailLength, &isGameOngoing);
+                try resetGame(allocator, &snakeHead, &snakeDirection, &tail, &tailLength, &isGameOngoing, &apple);
             }
         }
 
@@ -130,7 +143,7 @@ pub fn main() !void {
         if (currentTickTime > targetTickTime) {
             currentTickTime -= targetTickTime;
             if (isGameOngoing) {
-                try tickGame(&snakeHead, snakeDirection, &tail, &tailLength, &isGameOngoing);
+                try tickGame(allocator, &snakeHead, snakeDirection, &tail, &tailLength, &isGameOngoing, &apple);
                 oldSnakeDirection = snakeDirection;
             }
         }
@@ -139,16 +152,17 @@ pub fn main() !void {
     }
 }
 
-fn resetGame(allocator: std.mem.Allocator, snakeHead: *Position, snakeDirection: *Direction, tail: *PositionQueue, tailLength: *i32, isGameOngoing: *bool) void {
+fn resetGame(allocator: std.mem.Allocator, snakeHead: *Position, snakeDirection: *Direction, tail: *PositionQueue, tailLength: *i32, isGameOngoing: *bool, apple: *Position) !void {
     snakeHead.* = .{ .x = gameTilesX / 2, .y = gameTilesY / 2 };
     snakeDirection.* = Direction.north;
     tail.deinit();
     tail.* = PositionQueue.init(allocator);
-    tailLength.* = 10;
+    tailLength.* = 1;
+    try moveApple(allocator, snakeHead.*, tail, apple);
     isGameOngoing.* = true;
 }
 
-fn tickGame(snakeHead: *Position, snakeDirection: Direction, tail: *PositionQueue, tailLength: *i32, isGameOngoing: *bool) !void {
+fn tickGame(allocator: std.mem.Allocator, snakeHead: *Position, snakeDirection: Direction, tail: *PositionQueue, tailLength: *i32, isGameOngoing: *bool, apple: *Position) !void {
     const newPos = torwards(snakeHead.*, snakeDirection);
 
     const inBounds = newPos.x >= 0 and newPos.x < gameTilesX and newPos.y >= 0 and newPos.y < gameTilesY;
@@ -171,6 +185,42 @@ fn tickGame(snakeHead: *Position, snakeDirection: Direction, tail: *PositionQueu
     } else {
         isGameOngoing.* = false;
     }
+
+    if (apple.x == snakeHead.x and apple.y == snakeHead.y) {
+        tailLength.* += 1;
+        try moveApple(allocator, snakeHead.*, tail, apple);
+    }
+}
+
+fn moveApple(allocator: std.mem.Allocator, snakeHead: Position, tail: *PositionQueue, apple: *Position) !void {
+    var validSpots = std.ArrayList(Position).init(allocator);
+    defer validSpots.deinit();
+    for (0..gameTilesX) |x| {
+        yLoop: for (0..gameTilesY) |y| {
+            if (tail.first != null) {
+                var ptr: ?*PositionQueue.Node = tail.first;
+                while (ptr != null) {
+                    if (ptr.?.*.value.x == x and ptr.?.*.value.y == y) {
+                        continue :yLoop;
+                    }
+                    ptr = ptr.?.*.next;
+                }
+            }
+
+            if (x == snakeHead.x and y == snakeHead.y) {
+                continue :yLoop;
+            }
+
+            var pos: *Position = try validSpots.addOne();
+            pos.x = @intCast(x);
+            pos.y = @intCast(y);
+        }
+    }
+
+    var i: usize = undefined;
+    try std.posix.getrandom(std.mem.asBytes(&i));
+    i = i % validSpots.items.len;
+    apple.* = validSpots.items[i];
 }
 
 fn takeUserInput(direction: *Direction, oldDirection: Direction) void {
