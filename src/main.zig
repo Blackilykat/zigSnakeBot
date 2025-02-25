@@ -285,11 +285,10 @@ fn takeBotInput(allocator: std.mem.Allocator, direction: *Direction, pos: Positi
 
     var foundPath = false;
 
-    mainLoop: while (q.size > 0 and !foundPath) {
+    while (q.size > 0 and !foundPath) {
         const visiting: *Node = q.dequeue().?;
 
-        if (visiting.pos.x < 0 or visiting.pos.x >= gameTilesX or visiting.pos.y < 0 or visiting.pos.y >= gameTilesY) {
-            // out of bounds
+        if (!validSnakePos(visiting.pos, tail)) {
             continue;
         }
 
@@ -308,15 +307,6 @@ fn takeBotInput(allocator: std.mem.Allocator, direction: *Direction, pos: Positi
             firstMovement = n.?.pos;
 
             break;
-        }
-
-        var ptr = tail.first;
-        while (ptr) |node| {
-            if (node.value.x == visiting.pos.x and node.value.y == visiting.pos.y) {
-                // collision with tail
-                continue :mainLoop;
-            }
-            ptr = node.next;
         }
 
         visited[@intCast(visiting.pos.x)][@intCast(visiting.pos.y)] = true;
@@ -349,7 +339,35 @@ fn takeBotInput(allocator: std.mem.Allocator, direction: *Direction, pos: Positi
         if (firstMovement.x > pos.x) direction.* = Direction.east;
         if (firstMovement.y > pos.y) direction.* = Direction.south;
         if (firstMovement.x < pos.x) direction.* = Direction.west;
+    } else {
+        if (validSnakePos(.{ .x = pos.x, .y = pos.y - 1 }, tail)) direction.* = Direction.north;
+        if (validSnakePos(.{ .x = pos.x + 1, .y = pos.y }, tail)) direction.* = Direction.east;
+        if (validSnakePos(.{ .x = pos.x, .y = pos.y + 1 }, tail)) direction.* = Direction.south;
+        if (validSnakePos(.{ .x = pos.x - 1, .y = pos.y }, tail)) direction.* = Direction.west;
     }
+}
+
+fn validSnakePos(position: Position, tail: *PositionQueue) bool {
+    if (position.x < 0 or position.x >= gameTilesX or position.y < 0 or position.y >= gameTilesY) {
+        return false;
+    }
+
+    if (tailCollides(position, tail)) {
+        return false;
+    }
+
+    return true;
+}
+
+fn tailCollides(position: Position, tail: *PositionQueue) bool {
+    var n: ?*PositionQueue.Node = tail.first;
+    while (n) |node| {
+        if (node.value.x == position.x and node.value.y == position.y) {
+            return true;
+        }
+        n = node.next;
+    }
+    return false;
 }
 
 fn torwards(position: Position, direction: Direction) Position {
