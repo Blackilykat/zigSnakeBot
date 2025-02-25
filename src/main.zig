@@ -12,8 +12,6 @@ const gameTilesY: i16 = 20;
 const gameSpacingX: i16 = 20;
 const gameSpacingY: i16 = 20;
 
-const targetTickTime: f32 = 0.1;
-
 const groundColorA: Color = .{
     .r = 100,
     .g = 100,
@@ -75,6 +73,8 @@ pub fn main() !void {
     raylib.initWindow(windowWidth, windowHeight, windowTitle);
     raylib.setTargetFPS(100);
 
+    var targetTickTime: f32 = 0;
+
     var tailLength: i32 = 0;
 
     var tail = PositionQueue.init(allocator);
@@ -91,7 +91,7 @@ pub fn main() !void {
 
     var isBotControlling = true;
 
-    try resetGame(allocator, &snakeHead, &snakeDirection, &tail, &tailLength, &isGameOngoing, &apple);
+    try resetGame(allocator, &snakeHead, &snakeDirection, &tail, &tailLength, &isGameOngoing, &apple, &targetTickTime);
 
     while (!raylib.windowShouldClose()) {
         raylib.beginDrawing();
@@ -136,7 +136,7 @@ pub fn main() !void {
             }
 
             if (raylib.isKeyPressed(raylib.KeyboardKey.space)) {
-                try resetGame(allocator, &snakeHead, &snakeDirection, &tail, &tailLength, &isGameOngoing, &apple);
+                try resetGame(allocator, &snakeHead, &snakeDirection, &tail, &tailLength, &isGameOngoing, &apple, &targetTickTime);
             }
         }
 
@@ -154,7 +154,7 @@ pub fn main() !void {
                 if (isBotControlling) {
                     try takeBotInput(allocator, &snakeDirection, snakeHead, &tail, apple);
                 }
-                try tickGame(allocator, &snakeHead, snakeDirection, &tail, &tailLength, &isGameOngoing, &apple);
+                try tickGame(allocator, &snakeHead, snakeDirection, &tail, &tailLength, &isGameOngoing, &apple, &targetTickTime);
                 oldSnakeDirection = snakeDirection;
             }
         }
@@ -163,17 +163,18 @@ pub fn main() !void {
     }
 }
 
-fn resetGame(allocator: std.mem.Allocator, snakeHead: *Position, snakeDirection: *Direction, tail: *PositionQueue, tailLength: *i32, isGameOngoing: *bool, apple: *Position) !void {
+fn resetGame(allocator: std.mem.Allocator, snakeHead: *Position, snakeDirection: *Direction, tail: *PositionQueue, tailLength: *i32, isGameOngoing: *bool, apple: *Position, targetTickTime: *f32) !void {
     snakeHead.* = .{ .x = gameTilesX / 2, .y = gameTilesY / 2 };
     snakeDirection.* = Direction.north;
     tail.deinit();
     tail.* = PositionQueue.init(allocator);
     tailLength.* = 0;
     try moveApple(allocator, snakeHead.*, tail, apple);
+    targetTickTime.* = 0.2;
     isGameOngoing.* = true;
 }
 
-fn tickGame(allocator: std.mem.Allocator, snakeHead: *Position, snakeDirection: Direction, tail: *PositionQueue, tailLength: *i32, isGameOngoing: *bool, apple: *Position) !void {
+fn tickGame(allocator: std.mem.Allocator, snakeHead: *Position, snakeDirection: Direction, tail: *PositionQueue, tailLength: *i32, isGameOngoing: *bool, apple: *Position, targetTickTime: *f32) !void {
     const newPos = torwards(snakeHead.*, snakeDirection);
 
     const inBounds = newPos.x >= 0 and newPos.x < gameTilesX and newPos.y >= 0 and newPos.y < gameTilesY;
@@ -199,6 +200,7 @@ fn tickGame(allocator: std.mem.Allocator, snakeHead: *Position, snakeDirection: 
 
     if (apple.x == snakeHead.x and apple.y == snakeHead.y) {
         tailLength.* += 1;
+        targetTickTime.* -= targetTickTime.* / 20.0;
         try moveApple(allocator, snakeHead.*, tail, apple);
     }
 }
