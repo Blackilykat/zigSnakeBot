@@ -89,6 +89,8 @@ pub fn main() !void {
 
     var apple: Position = .{};
 
+    var isBotControlling = true;
+
     try resetGame(allocator, &snakeHead, &snakeDirection, &tail, &tailLength, &isGameOngoing, &apple);
 
     while (!raylib.windowShouldClose()) {
@@ -138,11 +140,20 @@ pub fn main() !void {
             }
         }
 
-        takeUserInput(&snakeDirection, oldSnakeDirection);
+        if (raylib.isKeyPressed(raylib.KeyboardKey.enter)) {
+            isBotControlling = !isBotControlling;
+        }
+
+        if (!isBotControlling) {
+            takeUserInput(&snakeDirection, oldSnakeDirection);
+        }
 
         if (currentTickTime > targetTickTime) {
             currentTickTime -= targetTickTime;
             if (isGameOngoing) {
+                if (isBotControlling) {
+                    try takeBotInput(allocator, &snakeDirection, snakeHead, &tail, apple);
+                }
                 try tickGame(allocator, &snakeHead, snakeDirection, &tail, &tailLength, &isGameOngoing, &apple);
                 oldSnakeDirection = snakeDirection;
             }
@@ -157,7 +168,7 @@ fn resetGame(allocator: std.mem.Allocator, snakeHead: *Position, snakeDirection:
     snakeDirection.* = Direction.north;
     tail.deinit();
     tail.* = PositionQueue.init(allocator);
-    tailLength.* = 1;
+    tailLength.* = 0;
     try moveApple(allocator, snakeHead.*, tail, apple);
     isGameOngoing.* = true;
 }
@@ -241,6 +252,103 @@ fn takeUserInput(direction: *Direction, oldDirection: Direction) void {
         if (oldDirection != Direction.west) {
             direction.* = Direction.east;
         }
+    }
+}
+
+fn takeBotInput(allocator: std.mem.Allocator, direction: *Direction, pos: Position, tail: *PositionQueue, apple: Position) !void {
+    const Node = struct {
+        pos: Position,
+        parent: ?*@This(),
+    };
+    const NodeQueue = queue.Queue(*Node);
+
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    var arenaAlloc = arena.allocator();
+    defer arena.deinit();
+
+    var q: NodeQueue = NodeQueue.init(allocator);
+    defer q.deinit();
+
+    const firstNode: *Node = try arenaAlloc.create(Node);
+    firstNode.pos = pos;
+    firstNode.parent = null;
+    try q.enqueue(firstNode);
+
+    var firstMovement: Position = undefined;
+
+    var visited: [gameTilesY][gameTilesX]bool = undefined;
+    for (&visited) |*row| {
+        for (row) |*value| {
+            value.* = false;
+        }
+    }
+
+    var foundPath = false;
+
+    mainLoop: while (q.size > 0 and !foundPath) {
+        const visiting: *Node = q.dequeue().?;
+
+        if (visiting.pos.x < 0 or visiting.pos.x >= gameTilesX or visiting.pos.y < 0 or visiting.pos.y >= gameTilesY) {
+            // out of bounds
+            continue;
+        }
+
+        if (visited[@intCast(visiting.pos.x)][@intCast(visiting.pos.y)]) {
+            continue;
+        }
+
+        if (visiting.pos.x == apple.x and visiting.pos.y == apple.y) {
+            foundPath = true;
+
+            var n: ?*Node = visiting;
+            while (n != null and n.?.parent != null and n.?.parent.?.parent != null) {
+                n = n.?.parent;
+            }
+
+            firstMovement = n.?.pos;
+
+            break;
+        }
+
+        var ptr = tail.first;
+        while (ptr) |node| {
+            if (node.value.x == visiting.pos.x and node.value.y == visiting.pos.y) {
+                // collision with tail
+                continue :mainLoop;
+            }
+            ptr = node.next;
+        }
+
+        visited[@intCast(visiting.pos.x)][@intCast(visiting.pos.y)] = true;
+
+        const northNode: *Node = try arenaAlloc.create(Node);
+        northNode.pos = .{ .x = visiting.pos.x, .y = visiting.pos.y - 1 };
+        northNode.parent = visiting;
+        try q.enqueue(northNode);
+
+        const eastNode: *Node = try arenaAlloc.create(Node);
+        eastNode.pos = .{ .x = visiting.pos.x + 1, .y = visiting.pos.y };
+        eastNode.parent = visiting;
+        try q.enqueue(eastNode);
+
+        const southNode: *Node = try arenaAlloc.create(Node);
+        southNode.pos = .{ .x = visiting.pos.x, .y = visiting.pos.y + 1 };
+        southNode.parent = visiting;
+        try q.enqueue(southNode);
+
+        const westNode: *Node = try arenaAlloc.create(Node);
+        westNode.pos = .{ .x = visiting.pos.x - 1, .y = visiting.pos.y };
+        westNode.parent = visiting;
+        try q.enqueue(westNode);
+    }
+
+    try std.io.getStdOut().writer().print("Found path: {any}\n", .{foundPath});
+    if (foundPath) {
+        try std.io.getStdOut().writer().print("first {any}, pos {any} \n", .{ firstMovement, pos });
+        if (firstMovement.y < pos.y) direction.* = Direction.north;
+        if (firstMovement.x > pos.x) direction.* = Direction.east;
+        if (firstMovement.y > pos.y) direction.* = Direction.south;
+        if (firstMovement.x < pos.x) direction.* = Direction.west;
     }
 }
 
