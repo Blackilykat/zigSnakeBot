@@ -25,9 +25,9 @@ const Neuron = struct {
 
 const Network = struct {
     var arena: ?std.heap.ArenaAllocator = null;
-    var inputNodes: ArrayList(Neuron) = undefined;
-    var hiddenLayers: ArrayList(ArrayList(Neuron)) = undefined;
-    var outputNodes: ArrayList(Neuron) = undefined;
+    pub var inputNodes: ArrayList(Neuron) = undefined;
+    pub var hiddenLayers: ArrayList(ArrayList(Neuron)) = undefined;
+    pub var outputNodes: ArrayList(Neuron) = undefined;
 
     pub fn init(allocator: std.mem.Allocator) !void {
         arena = std.heap.ArenaAllocator.init(allocator);
@@ -76,7 +76,7 @@ const Network = struct {
     }
 };
 
-pub fn takeBotInput(direction: *Direction, pos: Position, tail: *PositionQueue, apple: Position) !void {
+pub fn takeBotInput(network: *Network, direction: *Direction, pos: Position, tail: *PositionQueue, apple: Position) !void {
     var input: [game.gameTilesY][game.gameTilesX]f64 = undefined;
     for (0..game.gameTilesY) |y| {
         for (0..game.gameTilesX) |x| {
@@ -93,7 +93,52 @@ pub fn takeBotInput(direction: *Direction, pos: Position, tail: *PositionQueue, 
     input[pos.y][pos.x] = 0.6;
     input[apple.y][apple.x] = 1.0;
 
-    _ = direction;
+    for (0..input.len) |y| {
+        for (0..input[y].len) |x| {
+            network.inputNodes.items[y * input[y].len + x] = input[y][x];
+        }
+    }
+
+    for (network.hiddenLayers.items) |layer| {
+        for (layer.items) |node| {
+            node.weight = 0;
+            for (node.previousNodes.?.items) |prev| {
+                node.weight += prev.neuron.weight * prev.weight;
+            }
+            node.weight = relu(node.weight);
+        }
+    }
+
+    var i: u8 = 0;
+    var directionPicked: u8 = 0;
+    for (network.outputNodes.items) |node| {
+        node.weight = 0;
+        for (node.previousNodes.?.items) |prev| {
+            node.weight += prev.neuron.weight * prev.weight;
+        }
+        node.weight = relu(node.weight);
+
+        if (node.weight > network.outputNodes.items[directionPicked]) {
+            directionPicked = i;
+        }
+
+        i += 1;
+    }
+
+    switch (directionPicked) {
+        0 => {
+            direction.* = Direction.north;
+        },
+        1 => {
+            direction.* = Direction.east;
+        },
+        2 => {
+            direction.* = Direction.south;
+        },
+        3 => {
+            direction.* = Direction.west;
+        },
+    }
 }
 
 fn relu(n: f64) f64 {
